@@ -20,42 +20,53 @@
   fprintf(stderr, "%s:%s:%d > ", __FILE__, __func__, __LINE__); \
   fprintf(stderr, __VA_ARGS__);
 
-float clamp()
-{
-
-}
-
 typedef struct a4990 {
   int in1, in2, in3, in4;
+  float dir1, dir2;
 } a4990;
 
 a4990
-a4990_new(int in1, int in2, int in3, int in4)
+a4990_new(int in1, int in2, int in3, int in4, float dir1, float dir2)
 {
+  gpioSetMode(in1, PI_OUTPUT);
+  gpioSetMode(in2, PI_OUTPUT);
+  gpioSetMode(in3, PI_OUTPUT);
+  gpioSetMode(in4, PI_OUTPUT);
+
   gpioPWM(in1, 0);
   gpioPWM(in2, 0);
   gpioPWM(in3, 0);
   gpioPWM(in4, 0);
 
-  gpioSetPWMFrequency(in1, 21700);
-  gpioSetPWMFrequency(in2, 21700);
-  gpioSetPWMFrequency(in3, 21700);
-  gpioSetPWMFrequency(in4, 21700);
+  gpioSetPWMfrequency(in1, 21700);
+  gpioSetPWMfrequency(in2, 21700);
+  gpioSetPWMfrequency(in3, 21700);
+  gpioSetPWMfrequency(in4, 21700);
 
-  return (a4990){in1, in2, in3, in4};
+  return (a4990){in1, in2, in3, in4, dir1, dir2};
 }
 
 void
 a4990_set_pwr(a4990 *this, float pw1, float pw2) 
 {
-  pw1 = min(1.0, max(0.0, pw1));
-  pw2 = min(1.0, max(0.0, pw2));
+  pw1 = min(1.0, max(-1.0, pw1)) * dir1;
+  pw2 = min(1.0, max(-1.0, pw2)) * dir2;
 
-  gpioPWM(this->in1, (unsigned)(pw1 * 255));
-  gpioPWM(this->in2, (unsigned)(255 - pw1 * 255));
+  if (pw1 > 0) {
+    gpioPWM(this->in1, (unsigned)(pw1 * 255));
+    gpioPWM(this->in2, (unsigned)(0));
+  } else {
+    gpioPWM(this->in2, (unsigned)(pw1 * 255));
+    gpioPWM(this->in1, (unsigned)(0));
+  }
 
-  gpioPWM(this->in3, (unsigned)(pw2 * 255));
-  gpioPWM(this->in4, (unsigned)(255 - pw2 * 255));
+  if (pw2 > 0) {
+    gpioPWM(this->in3, (unsigned)(pw2 * 255));
+    gpioPWM(this->in4, (unsigned)(0));
+  } else {
+    gpioPWM(this->in4, (unsigned)(pw2 * 255));
+    gpioPWM(this->in3, (unsigned)(0));
+  }
 }
 
 typedef struct pinpoint {
@@ -70,7 +81,7 @@ enum pinpoint_registers {
   ppr_dev_ctrl,
   ppr_loop_time,
   ppr_x_enc_val,
-  ppr_x
+  ppr_x,
   ppr_y,
   ppr_h,
   ppr_vx,
@@ -86,19 +97,19 @@ enum pinpoint_registers {
 void
 pinpoint_set_x_pod_offset(pinpoint *this, float x_pod_offset)
 {
-  char buf[4];
-  *(float *)buf = x_pod_offset;
-
-  i2cWriteBlockData(this->handle, ppr_x_pod_offset, buf, 4);
+  i2cWriteI2CBlockData(this->handle, ppr_x_pod_offset, (char *)&x_pod_offset, 4);
 }
 
 void
 pinpoint_set_y_offset(pinpoint *this, float y_pod_offset)
 {
-  char buf[4];
-  *(float *)buf = y_pod_offset;
+  i2cWriteI2CBlockData(this->handle, ppr_y_pod_offset, (char *)&y_pod_offset, 4);
+}
 
-  i2cWriteBlockData(this->handle, ppr_y_pod_offset, buf, 4);
+void
+pinpoint_initialize(pinpoint *this)
+{
+  i2cWriteI2CBlockData(this->handle, ppr_dev_ctrl, (char *)&(int){1 << 1}, 4);
 }
 
 pinpoint
@@ -131,7 +142,7 @@ pinpoint_set_pos(pinpoint *this, float x, float y, float h)
   i2cWriteI2CBlockData(this->handle, ppr_h, (char *)&h, 4);
 }
 
-a4990 mc1, mc2;
+a4990 mc0, mc1;
 pinpoint pp;
 
 // :zany_face:
@@ -142,22 +153,19 @@ main(void)
 {
   gpioInitialise(); // if this fails it's cooked anyways so why handle the error
   
-  mc1 = a4990_new(c0_in1, c0_in2, c0_in3, c0_in4);
-  mc2 = a4990_new(c1_in1, c1_in2, c1_in3, c1_in4);
+  mc0 = a4990_new(c0_in1, c0_in2, c0_in3, c0_in4, 1, 1);
+  mc1 = a4990_new(c1_in1, c1_in2, c1_in3, c1_in4, 1, 1);
 
-  pp = pinpont_new(0, 0x31);
+  pp = pinpont_new(0, 0x31, 40, 40);
 
   gpioSetMode(button_pin, PI_INPUT);
 
+  a4990_set_pwr(&mc0, 0, 0);
+  a4990_set_pwr(&mc1, 0, 0);
+
   for ever {
-    // wait until button press
+    pinpoint_update(&pp);
 
-    int times = 0;
-    for ever {
-      if (gpioRead(button_pin)) times++;
-      else times = 0;
-
-      if (times == 5)
-    }
+    printf("%.3f, %.3f, %.3f\n", pp.x, pp.y, pp.h);
   }
 }
