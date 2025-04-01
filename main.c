@@ -3,6 +3,7 @@
 #include <pigpio.h>
 #include <tgmath.h>
 #include <unistd.h>
+#include <stdio.h>
 
 #define c0_in1 4
 #define c0_in2 17
@@ -49,8 +50,8 @@ a4990_new(int in1, int in2, int in3, int in4, float dir1, float dir2)
 void
 a4990_set_pwr(a4990 *this, float pw1, float pw2) 
 {
-  pw1 = min(1.0, max(-1.0, pw1)) * dir1;
-  pw2 = min(1.0, max(-1.0, pw2)) * dir2;
+  pw1 = fmin(1.0, fmax(-1.0, pw1)) * this->dir1;
+  pw2 = fmin(1.0, fmax(-1.0, pw2)) * this->dir2;
 
   if (pw1 > 0) {
     gpioPWM(this->in1, (unsigned)(pw1 * 255));
@@ -101,7 +102,7 @@ pinpoint_set_x_pod_offset(pinpoint *this, float x_pod_offset)
 }
 
 void
-pinpoint_set_y_offset(pinpoint *this, float y_pod_offset)
+pinpoint_set_y_pod_offset(pinpoint *this, float y_pod_offset)
 {
   i2cWriteI2CBlockData(this->handle, ppr_y_pod_offset, (char *)&y_pod_offset, 4);
 }
@@ -112,6 +113,12 @@ pinpoint_initialize(pinpoint *this)
   i2cWriteI2CBlockData(this->handle, ppr_dev_ctrl, (char *)&(int){1 << 1}, 4);
 }
 
+void
+pinpoint_set_ticks_per_mm(pinpoint *this, float res)
+{
+  i2cWriteI2CBlockData(this->handle, ppr_ticks_per_mm, (char *)&res, 4);
+}
+
 pinpoint
 pinpoint_new(int bus, int addr, int x_pod_offset, int y_pod_offset)
 {
@@ -120,8 +127,10 @@ pinpoint_new(int bus, int addr, int x_pod_offset, int y_pod_offset)
   if (handle < 0) err("failed to open pinpoint!");
 
   pinpoint out = (pinpoint){.handle = handle};
+  pinpoint_initialize(&out);
   pinpoint_set_x_pod_offset(&out, x_pod_offset);
   pinpoint_set_y_pod_offset(&out, y_pod_offset);
+  pinpoint_set_ticks_per_mm(&out, 13.26291192f);
 
   return out;
 }
@@ -156,7 +165,7 @@ main(void)
   mc0 = a4990_new(c0_in1, c0_in2, c0_in3, c0_in4, 1, 1);
   mc1 = a4990_new(c1_in1, c1_in2, c1_in3, c1_in4, 1, 1);
 
-  pp = pinpont_new(0, 0x31, 40, 40);
+  pp = pinpoint_new(1, 0x31, 40, 40);
 
   gpioSetMode(button_pin, PI_INPUT);
 
