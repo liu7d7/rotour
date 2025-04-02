@@ -262,6 +262,8 @@ main(void)
     pinpoint_update(&pp);
 
     printf("%.3f, %.3f, %.3f, %u, %u\n", pp.x, pp.y, pp.h, pp.x_enc, pp.y_enc);
+    
+    return;
 
     if (cp >= point_count) return 0;
 
@@ -276,5 +278,11 @@ main(void)
     float erx = target.x - cur.x, ery = target.y - cur.y;
     float angle_to_target = atan2(ery, erx);
     float angle_error = angle_wrap(angle_to_target);
+
+    float rotated_erx = erx * cos(angle_error) - ery * sin(angle_error);
+    float rotated_ery = ery * cos(angle_error) + erx * sin(angle_error);
+
+    px.goal = rotated_erx;
+    py.goal = rotated_ery;
   }
 }
