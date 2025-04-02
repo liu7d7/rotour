@@ -278,7 +278,8 @@ main(void)
     float yc = squidf_calc(&px, rotated_ery);
     float hc = squidf_calc(&px, -pp.h);
 
-    a4990
+    a4990_set_pwr(&mc_y, -yc + hc, -yc - hc);
+    a4990_set_pwr(&mc_x, xc - hc, xc + hc);
 
     printf("%.3f, %.3f, %.3f, %u, %u\n", pp.x, pp.y, pp.h, pp.x_enc, pp.y_enc);
   }
