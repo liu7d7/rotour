@@ -199,16 +199,18 @@ squidf_calc(squidf *this, float cur)
   float error = this->goal - cur;
   float time = time_s(0);
 
-  float p = this->p * sqrt(abs(errror)) * copysign(1, error), i = 0, d = 0;
+  float p = this->p * sqrt(abs(error)) * copysign(1, error), i = 0, d = 0;
   
   if (!this->first_run) {
     d = this->d * (error - this->last_err) / (time - this->last_time);
     i = this->i * this->err_sum;
   }
 
+  float f = this->f * copysign(1, error);
+
   this->first_run = false;
   this->err_sum += error;
-  this->last_error = error;
+  this->last_err = error;
   this->last_time = time;
 
   return p + i + d + f;
@@ -219,6 +221,16 @@ pinpoint pp;
 
 // :zany_face:
 #define ever (;;)
+
+float
+angle_wrap(float x)
+{
+  static const float pi = 3.1415926f;
+
+  x = fmod(x + pi, 2 * pi);
+  if (x < 0) x += 2 * pi;
+  return x - pi;
+}
 
 int
 main(void)
@@ -237,11 +249,32 @@ main(void)
 
   read_points();
 
+  squidf ph = squidf_new(0.05, 0, 0, 0);
+  ph.goal = 0;
+  squidf px = squidf_new(0.001, 0, 0, 0);
+  squidf py = squidf_new(0.001, 0, 0, 0);
+
+  int cp = 0;
+
   time_s(1);
 
   for ever {
     pinpoint_update(&pp);
 
     printf("%.3f, %.3f, %.3f, %u, %u\n", pp.x, pp.y, pp.h, pp.x_enc, pp.y_enc);
+
+    if (cp >= point_count) return 0;
+
+    Point target = points[cp];
+    Point cur = {.x = pp.x, .y = pp.y};
+
+    if (dist(cur, target) < 0.01) {
+      cp++;
+      continue;
+    }
+
+    float erx = target.x - cur.x, ery = target.y - cur.y;
+    float angle_to_target = atan2(ery, erx);
+    float angle_error = angle_wrap(angle_to_target);
   }
 }
