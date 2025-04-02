@@ -5,15 +5,15 @@
 #include <unistd.h>
 #include <stdio.h>
 
-#define c0_in1 22
-#define c0_in2 10
-#define c0_in3 9
-#define c0_in4 27
+#define c0_in1 4
+#define c0_in2 17
+#define c0_in3 27
+#define c0_in4 22
 
-#define c1_in1 24
-#define c1_in2 25
-#define c1_in3 20
-#define c1_in4 21
+#define c1_in1 14
+#define c1_in2 15
+#define c1_in3 18
+#define c1_in4 23
 
 #define button_pin 24
 
@@ -54,18 +54,18 @@ a4990_set_pwr(a4990 *this, float pw1, float pw2)
   pw2 = fmin(1.0, fmax(-1.0, pw2)) * this->dir2;
 
   if (pw1 > 0) {
-    gpioPWM(this->in1, (unsigned)(fabs(pw1) * 255));
+    gpioPWM(this->in1, (unsigned)(pw1 * 255));
     gpioPWM(this->in2, (unsigned)(0));
   } else {
-    gpioPWM(this->in2, (unsigned)(fabs(pw1) * 255));
+    gpioPWM(this->in2, (unsigned)(pw1 * 255));
     gpioPWM(this->in1, (unsigned)(0));
   }
 
   if (pw2 > 0) {
-    gpioPWM(this->in3, (unsigned)(fabs(pw2) * 255));
+    gpioPWM(this->in3, (unsigned)(pw2 * 255));
     gpioPWM(this->in4, (unsigned)(0));
   } else {
-    gpioPWM(this->in4, (unsigned)(fabs(pw2) * 255));
+    gpioPWM(this->in4, (unsigned)(pw2 * 255));
     gpioPWM(this->in3, (unsigned)(0));
   }
 }
@@ -76,7 +76,7 @@ typedef struct pinpoint {
   int handle;
 } pinpoint;
 
-enum pinpoint_reg {
+enum pinpoint_registers {
   ppr_dev_id = 1,
   ppr_dev_ver,
   ppr_dev_status,
@@ -96,11 +96,6 @@ enum pinpoint_reg {
   ppr_yaw_offset,
   ppr_bulk_read
 };
-
-typedef union pinpoint_val {
-  int i;
-  float f;
-} pinpoint_val;
 
 void
 pinpoint_set_x_pod_offset(pinpoint *this, float x_pod_offset)
@@ -147,11 +142,14 @@ pinpoint_new(int bus, int addr, int x_pod_offset, int y_pod_offset)
 void
 pinpoint_update(pinpoint *this) 
 {
-  static pinpoint_val buf[8];
+  i2cReadI2CBlockData(this->handle, ppr_x, (char *)&this->x, 4);
+  i2cReadI2CBlockData(this->handle, ppr_y, (char *)&this->y, 4);
+  i2cReadI2CBlockData(this->handle, ppr_h, (char *)&this->h, 4);
+  i2cReadI2CBlockData(this->handle, ppr_x_enc_val, (char *)&this->x_enc, 4);
+  i2cReadI2CBlockData(this->handle, ppr_y_enc_val, (char *)&this->y_enc, 4);
 
-  i2cReadI2CBlockData(this->handle, ppr_bulk_read, (char *)buf, 32);
-  this->x = buf[4].f * 1e-3, this->y = buf[5].f * 1e-3, this->h = buf[6].f;
-  this->x_enc = buf[2].i, this->y_enc = buf[3].i;
+  //this->x *= 1e-3;
+  //this->y *= 1e-3;
 }
 
 void
@@ -176,16 +174,23 @@ main(void)
   mc0 = a4990_new(c0_in1, c0_in2, c0_in3, c0_in4, -1, -1);
   mc1 = a4990_new(c1_in1, c1_in2, c1_in3, c1_in4, 1, -1);
 
-  pp = pinpoint_new(1, 0x31, 40., -40.);
+  pp = pinpoint_new(1, 0x31, 40.0, 40.0);
 
   gpioSetMode(button_pin, PI_INPUT);
 
-  a4990_set_pwr(&mc0, 0.5, 0.5);
-  a4990_set_pwr(&mc1, 0.5, 0.5);
+  a4990_set_pwr(&mc0, 0., 0.);
+  a4990_set_pwr(&mc1, 0., 0.);
+
+  float fd = 0.0;
+  int id = 0;
 
   for ever {
-    pinpoint_update(&pp);
-
-    printf("%.3f, %.3f, %.3f, %u, %u\n", pp.x, pp.y, pp.h, pp.x_enc, pp.y_enc);
+    //pinpoint_update(&pp);
+    i2cReadI2CBlockData(pp.handle, 8, (char *)&fd, 4);
+    pp.x = fd;
+    i2cReadI2CBlockData(pp.handle, 9, (char *)&fd, 4);
+    pp.y = fd;
+    printf("r9 = %.3f\n", fd);
+    sleep(1);
   }
 }

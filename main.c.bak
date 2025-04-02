@@ -5,15 +5,15 @@
 #include <unistd.h>
 #include <stdio.h>
 
-#define c0_in1 22
-#define c0_in2 10
-#define c0_in3 9
-#define c0_in4 27
+#define c0_in1 4
+#define c0_in2 17
+#define c0_in3 27
+#define c0_in4 22
 
-#define c1_in1 24
-#define c1_in2 25
-#define c1_in3 20
-#define c1_in4 21
+#define c1_in1 14
+#define c1_in2 15
+#define c1_in3 18
+#define c1_in4 23
 
 #define button_pin 24
 
@@ -176,12 +176,12 @@ main(void)
   mc0 = a4990_new(c0_in1, c0_in2, c0_in3, c0_in4, -1, -1);
   mc1 = a4990_new(c1_in1, c1_in2, c1_in3, c1_in4, 1, -1);
 
-  pp = pinpoint_new(1, 0x31, 40., -40.);
+  pp = pinpoint_new(1, 0x31, 40, -40);
 
   gpioSetMode(button_pin, PI_INPUT);
 
-  a4990_set_pwr(&mc0, 0.5, 0.5);
-  a4990_set_pwr(&mc1, 0.5, 0.5);
+  a4990_set_pwr(&mc0, 0., 0.);
+  a4990_set_pwr(&mc1, 0., 0.);
 
   for ever {
     pinpoint_update(&pp);
