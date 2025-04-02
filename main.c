@@ -163,13 +163,23 @@ pinpoint_new(int bus, int addr, int x_pod_offset, int y_pod_offset)
   return out;
 }
 
+float
+angle_wrap(float x)
+{
+  static const float pi = 3.1415926f;
+
+  x = fmod(x + pi, 2 * pi);
+  if (x < 0) x += 2 * pi;
+  return x - pi;
+}
+
 void
 pinpoint_update(pinpoint *this) 
 {
   static pinpoint_val buf[8];
 
   i2cReadI2CBlockData(this->handle, ppr_bulk_read, (char *)buf, 32);
-  this->x = buf[4].f * 1e-3, this->y = buf[5].f * 1e-3, this->h = buf[6].f;
+  this->x = buf[4].f * 1e-3, this->y = buf[5].f * 1e-3, this->h = angle_wrap(buf[6].f);
   this->x_enc = buf[2].i, this->y_enc = buf[3].i;
 }
 
@@ -201,7 +211,9 @@ squidf_calc(squidf *this, float error)
   float p = this->p * sqrt(fabs(error)) * copysign(1, error), i = 0, d = 0;
   
   if (!this->first_run) {
-    d = this->d * (error - this->last_err) / (time - this->last_time);
+    if (this->d != 0) {
+      d = this->d * (error - this->last_err) / (time - this->last_time);
+    }
     i = this->i * this->err_sum;
   }
 
@@ -221,16 +233,6 @@ pinpoint pp;
 // :zany_face:
 #define ever (;;)
 
-float
-angle_wrap(float x)
-{
-  static const float pi = 3.1415926f;
-
-  x = fmod(x + pi, 2 * pi);
-  if (x < 0) x += 2 * pi;
-  return x - pi;
-}
-
 int
 main(void)
 {
@@ -240,14 +242,15 @@ main(void)
   mc_x = a4990_new(c1_in1, c1_in2, c1_in3, c1_in4, 1, -1);
 
   pp = pinpoint_new(1, 0x31, 40., -40.);
+  sleep(4);
 
   gpioSetMode(button_pin, PI_INPUT);
 
   read_points();
 
-  squidf ph = squidf_new(0.05, 0, 0, 0);
-  squidf px = squidf_new(0.001, 0, 0, 0);
-  squidf py = squidf_new(0.001, 0, 0, 0);
+  squidf ph = squidf_new(0.25, 0, 0, 0);
+  squidf px = squidf_new(0.4, 0, 0, 0);
+  squidf py = squidf_new(0.4, 0, 0, 0);
 
   int cp = 0;
 
@@ -276,11 +279,11 @@ main(void)
 
     float xc = squidf_calc(&px, rotated_erx);
     float yc = squidf_calc(&px, rotated_ery);
-    float hc = squidf_calc(&px, -pp.h);
+    float hc = squidf_calc(&px, pp.h);
 
-    a4990_set_pwr(&mc_y, -yc + hc, -yc - hc);
-    a4990_set_pwr(&mc_x, xc - hc, xc + hc);
+    a4990_set_pwr(&mc_y, hc, -hc);
+    a4990_set_pwr(&mc_x, hc, -hc);
 
-    printf("%.3f, %.3f, %.3f, %u, %u\n", pp.x, pp.y, pp.h, pp.x_enc, pp.y_enc);
+    printf("x: %.3f, y: %.3f, h: %.3f, cp: %d, ex: %f, ey: %f, rx: %f, ry: %f, xc: %f, yc: %f, hc: %f\n", pp.x, pp.y, pp.h, cp, erx, ery, rotated_erx, rotated_ery, xc, yc, hc);
   }
 }
