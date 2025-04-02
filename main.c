@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <stdio.h>
+#include "parser.c"
 #include <stdbool.h>
 
 #define c0_in1 22
@@ -182,13 +183,35 @@ pinpoint_set_pos(pinpoint *this, float x, float y, float h)
 
 typedef struct squidf {
   float p, i, d, f;
-  float last_err, 
+  float last_err, err_sum, last_time, goal;
+  bool first_run;
 } squidf;
 
 squidf
 squidf_new(float p, float i, float d, float f)
 {
-  return (squidf){p, i, d, f, .
+  return (squidf){p, i, d, f, .first_run = true};
+}
+
+float
+squidf_calc(squidf *this, float cur) 
+{
+  float error = this->goal - cur;
+  float time = time_s(0);
+
+  float p = this->p * sqrt(abs(errror)) * copysign(1, error), i = 0, d = 0;
+  
+  if (!this->first_run) {
+    d = this->d * (error - this->last_err) / (time - this->last_time);
+    i = this->i * this->err_sum;
+  }
+
+  this->first_run = false;
+  this->err_sum += error;
+  this->last_error = error;
+  this->last_time = time;
+
+  return p + i + d + f;
 }
 
 a4990 mc0, mc1;
@@ -211,6 +234,10 @@ main(void)
 
   a4990_set_pwr(&mc0, 0.5, 0.5);
   a4990_set_pwr(&mc1, 0.5, 0.5);
+
+  read_points();
+
+  time_s(1);
 
   for ever {
     pinpoint_update(&pp);
