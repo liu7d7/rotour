@@ -58,10 +58,10 @@ a4990_new(int in1, int in2, int in3, int in4, float dir1, float dir2)
   gpioPWM(in3, 0);
   gpioPWM(in4, 0);
 
-  gpioSetPWMfrequency(in1, 21700);
-  gpioSetPWMfrequency(in2, 21700);
-  gpioSetPWMfrequency(in3, 21700);
-  gpioSetPWMfrequency(in4, 21700);
+  gpioSetPWMfrequency(in1, 200);
+  gpioSetPWMfrequency(in2, 200);
+  gpioSetPWMfrequency(in3, 200);
+  gpioSetPWMfrequency(in4, 200);
 
   return (a4990){in1, in2, in3, in4, dir1, dir2};
 }
@@ -194,12 +194,11 @@ squidf_new(float p, float i, float d, float f)
 }
 
 float
-squidf_calc(squidf *this, float cur) 
+squidf_calc(squidf *this, float error) 
 {
-  float error = this->goal - cur;
   float time = time_s(0);
 
-  float p = this->p * sqrt(abs(error)) * copysign(1, error), i = 0, d = 0;
+  float p = this->p * sqrt(fabs(error)) * copysign(1, error), i = 0, d = 0;
   
   if (!this->first_run) {
     d = this->d * (error - this->last_err) / (time - this->last_time);
@@ -216,7 +215,7 @@ squidf_calc(squidf *this, float cur)
   return p + i + d + f;
 }
 
-a4990 mc0, mc1;
+a4990 mc_y, mc_x;
 pinpoint pp;
 
 // :zany_face:
@@ -237,20 +236,16 @@ main(void)
 {
   gpioInitialise(); // if this fails it's cooked anyways so why handle the error
   
-  mc0 = a4990_new(c0_in1, c0_in2, c0_in3, c0_in4, -1, -1);
-  mc1 = a4990_new(c1_in1, c1_in2, c1_in3, c1_in4, 1, -1);
+  mc_y = a4990_new(c0_in1, c0_in2, c0_in3, c0_in4, -1, -1);
+  mc_x = a4990_new(c1_in1, c1_in2, c1_in3, c1_in4, 1, -1);
 
   pp = pinpoint_new(1, 0x31, 40., -40.);
 
   gpioSetMode(button_pin, PI_INPUT);
 
-  a4990_set_pwr(&mc0, 0.5, 0.5);
-  a4990_set_pwr(&mc1, 0.5, 0.5);
-
   read_points();
 
   squidf ph = squidf_new(0.05, 0, 0, 0);
-  ph.goal = 0;
   squidf px = squidf_new(0.001, 0, 0, 0);
   squidf py = squidf_new(0.001, 0, 0, 0);
 
@@ -261,10 +256,7 @@ main(void)
   for ever {
     pinpoint_update(&pp);
 
-    printf("%.3f, %.3f, %.3f, %u, %u\n", pp.x, pp.y, pp.h, pp.x_enc, pp.y_enc);
     
-    return;
-
     if (cp >= point_count) return 0;
 
     Point target = points[cp];
@@ -279,10 +271,15 @@ main(void)
     float angle_to_target = atan2(ery, erx);
     float angle_error = angle_wrap(angle_to_target);
 
-    float rotated_erx = erx * cos(angle_error) - ery * sin(angle_error);
-    float rotated_ery = ery * cos(angle_error) + erx * sin(angle_error);
+    float rotated_erx = erx * cos(pp.h) - ery * sin(pp.h);
+    float rotated_ery = ery * cos(pp.h) + erx * sin(pp.h);
 
-    px.goal = rotated_erx;
-    py.goal = rotated_ery;
+    float xc = squidf_calc(&px, rotated_erx);
+    float yc = squidf_calc(&px, rotated_ery);
+    float hc = squidf_calc(&px, -pp.h);
+
+    a4990
+
+    printf("%.3f, %.3f, %.3f, %u, %u\n", pp.x, pp.y, pp.h, pp.x_enc, pp.y_enc);
   }
 }
