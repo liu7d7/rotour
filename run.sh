@@ -1,1 +1,1 @@
-gcc -o main main.c -std=c2x -lpigpio -lm && sudo ./main
+gcc -o main main.c -std=gnu2x -lpigpio -lm && sudo ./main

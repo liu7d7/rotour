@@ -3,7 +3,9 @@
 #include <pigpio.h>
 #include <tgmath.h>
 #include <unistd.h>
+#include <sys/time.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #define c0_in1 22
 #define c0_in2 10
@@ -17,9 +19,25 @@
 
 #define button_pin 24
 
-#define err(...) \
+#define err(...) do { \
   fprintf(stderr, "%s:%s:%d > ", __FILE__, __func__, __LINE__); \
-  fprintf(stderr, __VA_ARGS__);
+  fprintf(stderr, __VA_ARGS__); \
+  exit(-1); } while (false);
+
+long long start_time;
+
+float
+time_s(bool reset)
+{
+  struct timeval tv;
+  if (gettimeofday(&tv, NULL) == 0) {
+    long long us = (long long)tv.tv_sec * 1000000 + tv.tv_usec;
+    if (reset) start_time = us;
+    return (float)(us - start_time) / 1000000.f;
+  } 
+
+  err("failed to get time!");
+}
 
 typedef struct a4990 {
   int in1, in2, in3, in4;
@@ -160,6 +178,17 @@ pinpoint_set_pos(pinpoint *this, float x, float y, float h)
   i2cWriteI2CBlockData(this->handle, ppr_x, (char *)&x, 4);
   i2cWriteI2CBlockData(this->handle, ppr_y, (char *)&y, 4);
   i2cWriteI2CBlockData(this->handle, ppr_h, (char *)&h, 4);
+}
+
+typedef struct squidf {
+  float p, i, d, f;
+  float last_err, 
+} squidf;
+
+squidf
+squidf_new(float p, float i, float d, float f)
+{
+  return (squidf){p, i, d, f, .
 }
 
 a4990 mc0, mc1;
