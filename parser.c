@@ -28,6 +28,8 @@ static void read_points() {
 
     char line[256];
 
+    float px = 0, py = 0;
+
     while (fgets(line, sizeof(line), file) != NULL) {
         // Skip empty lines and comments (lines starting with #)
         if (line[0] == '\n' || line[0] == '#') {
@@ -41,23 +43,29 @@ static void read_points() {
         //parse doubles separated by space
         if (sscanf(line, "%f %f", &x, &y) == 2) {
             if (point_count < MAX_POINTS) {
-                float px = points[point_count-1].x;
-		float py = points[point_count-1].y;
+		float dx = x - px;
+		float dy = y - py;
 		float len = hypot(px - x, py - y);
 
-                if (point_count > 0 &&  len > 0.75) {
+                if (point_count > 0 && len > 0.75) {
 		    float slices = ceil(len / 0.5);
 		    for (int s = 0; s < (int)slices; s++) {
-                        points[point_count].x = (points[point_count-1].x+x) * (s + 1) / slices;
-                        points[point_count].y = (points[point_count-1].y+y) * (s + 1) / slices;
+                        points[point_count].x = px + dx * (s + 1) / slices;
+                        points[point_count].y = py + dy * (s + 1) / slices;
                         point_count++;
 		    }
-                }
+                } else {
+		  points[point_count].x = x;
+		  points[point_count].y = y;
+		  point_count++;
+		}
             } 
             else {
                 fprintf(stderr, "Maximum number of points (%d) reached. Skipping the rest.\n", MAX_POINTS);
                 break;
             }
+
+	    px = x, py = y;
         } 
         else {
             fprintf(stderr, "Could not parse line: %s\n", line);

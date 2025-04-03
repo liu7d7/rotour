@@ -20,7 +20,7 @@
 
 #define button_pin 24
 
-#define mc_thresh 0.12
+#define mc_thresh 0.033
 
 #define err(...) do { \
   fprintf(stderr, "%s:%s:%d > ", __FILE__, __func__, __LINE__); \
@@ -47,6 +47,8 @@ typedef struct a4990 {
   float dir1, dir2;
 } a4990;
 
+#define pwm_range 20000
+
 a4990
 a4990_new(int in1, int in2, int in3, int in4, float dir1, float dir2)
 {
@@ -60,10 +62,15 @@ a4990_new(int in1, int in2, int in3, int in4, float dir1, float dir2)
   gpioPWM(in3, 0);
   gpioPWM(in4, 0);
 
-  gpioSetPWMfrequency(in1, 200);
-  gpioSetPWMfrequency(in2, 200);
-  gpioSetPWMfrequency(in3, 200);
-  gpioSetPWMfrequency(in4, 200);
+  gpioSetPWMfrequency(in1, 100000);
+  gpioSetPWMfrequency(in2, 100000);
+  gpioSetPWMfrequency(in3, 100000);
+  gpioSetPWMfrequency(in4, 100000);
+
+  gpioSetPWMrange(in1, pwm_range);
+  gpioSetPWMrange(in2, pwm_range);
+  gpioSetPWMrange(in3, pwm_range);
+  gpioSetPWMrange(in4, pwm_range);
 
   return (a4990){in1, in2, in3, in4, dir1, dir2};
 }
@@ -74,30 +81,20 @@ a4990_set_pwr(a4990 *this, float pw1, float pw2)
   pw1 = fmin(1.0, fmax(-1.0, pw1)) * this->dir1;
   pw2 = fmin(1.0, fmax(-1.0, pw2)) * this->dir2;
 
-  if (fabs(pw1) > mc_thresh) {
   if (pw1 > 0) {
-    gpioPWM(this->in1, (unsigned)(fabs(pw1) * 255));
+    gpioPWM(this->in1, (unsigned)(fabs(pw1) * pwm_range));
     gpioPWM(this->in2, (unsigned)(0));
   } else {
-    gpioPWM(this->in2, (unsigned)(fabs(pw1) * 255));
-    gpioPWM(this->in1, (unsigned)(0));
-  }
-  } else {
-    gpioPWM(this->in2, (unsigned)(0));
+    gpioPWM(this->in2, (unsigned)(fabs(pw1) * pwm_range));
     gpioPWM(this->in1, (unsigned)(0));
   }
 
-  if (fabs(pw2) > mc_thresh) {
   if (pw2 > 0) {
-    gpioPWM(this->in3, (unsigned)(fabs(pw2) * 255));
+    gpioPWM(this->in3, (unsigned)(fabs(pw2) * pwm_range));
     gpioPWM(this->in4, (unsigned)(0));
   } else {
-    gpioPWM(this->in4, (unsigned)(fabs(pw2) * 255));
+    gpioPWM(this->in4, (unsigned)(fabs(pw2) * pwm_range));
     gpioPWM(this->in3, (unsigned)(0));
-  }
-  } else {
-    gpioPWM(this->in3, (unsigned)(0));
-    gpioPWM(this->in4, (unsigned)(0));
   }
 }
 
@@ -203,24 +200,24 @@ pinpoint_set_pos(pinpoint *this, float x, float y, float h)
   i2cWriteI2CBlockData(this->handle, ppr_h, (char *)&h, 4);
 }
 
-typedef struct squidf {
+typedef struct pidf {
   float p, i, d, f;
   float last_err, err_sum, last_time, goal;
   bool first_run;
-} squidf;
+} pidf;
 
-squidf
-squidf_new(float p, float i, float d, float f)
+pidf
+pidf_new(float p, float i, float d, float f)
 {
-  return (squidf){p, i, d, f, .first_run = true};
+  return (pidf){p, i, d, f, .first_run = true};
 }
 
 float
-squidf_calc(squidf *this, float error) 
+pidf_calc(pidf *this, float error) 
 {
   float time = time_s(0);
 
-  float p = this->p * sqrt(fabs(error)) * copysign(1, error), i = 0, d = 0;
+  float p = this->p * error, i = 0, d = 0;
   
   if (!this->first_run) {
     if (this->d != 0) {
@@ -232,7 +229,7 @@ squidf_calc(squidf *this, float error)
   float f = this->f * copysign(1, error);
 
   this->first_run = false;
-  this->err_sum += error;
+  this->err_sum += error * (time - this->last_time);
   this->last_err = error;
   this->last_time = time;
 
@@ -257,49 +254,59 @@ lerp(float a, float b, float delta)
   return a + (b - a) * delta;
 }
 
-Point
-get_interpolated_point(float max_time, float time)
+void
+get_interpolated_point(float max_time, float time, bool *should_integrate, Point *out)
 {
   int n_segments = point_count - 1;
   float delta = time / max_time;
 
   if (delta >= 1.) {
-    return points[point_count - 1];
+    *out = points[point_count - 1];
+    *should_integrate = true;
+    return;
   }
 
   int this_seg = delta * n_segments;
-  float seg_delta = delta - floor(delta * n_segments) / n_segments;
+  float seg_delta = delta * n_segments - floor(delta * n_segments);
 
-  return (Point){
+  printf("\n\nvvvv\ndelta: %f, this_seg: %d, seg_delta: %f\n", delta, this_seg, seg_delta);
+
+  *out = (Point){
     .x = lerp(points[this_seg].x, points[this_seg + 1].x, seg_delta),
     .y = lerp(points[this_seg].y, points[this_seg + 1].y, seg_delta)
   };
+  *should_integrate = false;
 }
 
 int
 main(void)
 {
   gpioInitialise(); // if this fails it's cooked anyways so why handle the error
+  gpioCfgClock(2, 0, 0);
   
   mc_y = a4990_new(c0_in1, c0_in2, c0_in3, c0_in4, 1, 1);
   mc_x = a4990_new(c1_in1, c1_in2, c1_in3, c1_in4, 1, -1);
 
   pp = pinpoint_new(1, 0x31, 40., -40.);
   sleep(4);
+  pinpoint_update(&pp);
 
   gpioSetMode(button_pin, PI_INPUT);
 
   read_points();
+  fflush(stdout);
 
-  squidf ph = squidf_new(0.6, 0, 0.2, 0);
-  squidf px = squidf_new(0.6, 0, 0.2, 0);
-  squidf py = squidf_new(0.6, 0, 0.2, 0);
+  pidf ph = pidf_new(0.2, 0, 0.08, 0);
+  pidf px = pidf_new(0.6, 0.1, 0.2, 0);
+  pidf py = pidf_new(0.6, 0.1, 0.2, 0);
+
+  pidf spx = pidf_new(0.2, 0, 0, 0);
+  pidf spy = pidf_new(0.2, 0, 0, 0);
 
   time_s(1);
 
-  float max_time = 10;
-
   bool has_reached_endpoint = false;
+  bool prev_should_integrate = false;
   float time_reached_endpoint = 0;
 
   Point endpoint = points[point_count - 1];
@@ -308,18 +315,27 @@ main(void)
     pinpoint_update(&pp);
  
     Point cur = {.x = pp.x, .y = pp.y};
-    if (dist(cur, endpoint) > 0.01) {
+    if (dist(cur, endpoint) < 0.02) {
       if (!has_reached_endpoint) {
         has_reached_endpoint = true;
 	time_reached_endpoint = time_s(0);
-      } else if (time_s(0) - time_reached_endpoint > 2) {
+      } else if (time_s(0) - time_reached_endpoint > 0.5) {
         goto end;
       }
     } else {
       has_reached_endpoint = false;
     }
 
-    Point target = get_interpolated_point(10, time_s(0));
+    Point target;
+    bool should_integrate;
+    get_interpolated_point(9.5, time_s(0), &should_integrate, &target);
+
+    if (should_integrate && !prev_should_integrate) {
+      px = spx;
+      py = spy;
+    }
+
+    prev_should_integrate = should_integrate;
 
     float erx = target.x - cur.x, ery = target.y - cur.y;
     float angle_to_target = atan2(ery, erx);
@@ -328,9 +344,9 @@ main(void)
     float rotated_erx = erx * cos(pp.h) - ery * sin(pp.h);
     float rotated_ery = ery * cos(pp.h) + erx * sin(pp.h);
 
-    float xc = squidf_calc(&px, rotated_erx);
-    float yc = squidf_calc(&py, rotated_ery);
-    float hc = squidf_calc(&ph, pp.h);
+    float xc = pidf_calc(&px, rotated_erx);
+    float yc = pidf_calc(&py, rotated_ery);
+    float hc = pidf_calc(&ph, pp.h);
 
     float a = yc - hc, b = yc + hc, c = xc + hc, d = xc - hc;
     float mm = fmax(fabs(a), fmax(fabs(b), fmax(fabs(c), fabs(d))));
@@ -339,11 +355,15 @@ main(void)
     a4990_set_pwr(&mc_y, motor_scale(a), motor_scale(b));
     a4990_set_pwr(&mc_x, motor_scale(c), motor_scale(d));
 
-    printf("x: %.3f, y: %.3f, h: %.3f, cp: %d, ex: %f, ey: %f, rx: %f, ry: %f, xc: %f, yc: %f, hc: %f\n", pp.x, pp.y, pp.h, cp, erx, ery, rotated_erx, rotated_ery, xc, yc, hc);
+    printf("x: %.3f, y: %.3f, h: %.3f, tx: %f, ty: %f, time: %f, xc: %f, yc: %f, hc: %f\n", pp.x, pp.y, pp.h, target.x, target.y, time_s(0), xc, yc, hc);
+
+    usleep(8333);
   }
 
 end:
 
   a4990_set_pwr(&mc_x, 0, 0);
   a4990_set_pwr(&mc_y, 0, 0);
+
+  gpioTerminate();
 }
