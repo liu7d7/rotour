@@ -251,20 +251,6 @@ motor_scale(float power)
   return copysign(mc_thresh, power) + power * (1 - mc_thresh);
 }
 
-Point
-get_interpolated_point(float max_time, float time)
-{
-  int n_segments = point_count - 1;
-  float delta = time / max_time;
-
-  if (delta >= 1.) {
-    return points[point_count - 1];
-  }
-
-  int this_seg = delta * n_segments;
-  float seg_delta = delta - floor(delta * n_segments) / n_segments;
-}
-
 int
 main(void)
 {
@@ -280,7 +266,7 @@ main(void)
 
   read_points();
 
-  squidf ph = squidf_new(0.6, 0, 0.2, 0);
+  squidf ph = squidf_new(0.25, 0, 0.1, 0);
   squidf px = squidf_new(0.6, 0, 0.2, 0);
   squidf py = squidf_new(0.6, 0, 0.2, 0);
 
@@ -321,8 +307,8 @@ main(void)
     float rotated_ery = ery * cos(pp.h) + erx * sin(pp.h);
 
     float xc = squidf_calc(&px, rotated_erx);
-    float yc = squidf_calc(&py, rotated_ery);
-    float hc = squidf_calc(&ph, pp.h);
+    float yc = squidf_calc(&px, rotated_ery);
+    float hc = squidf_calc(&px, pp.h);
 
     float a = yc - hc, b = yc + hc, c = xc + hc, d = xc - hc;
     float mm = fmax(fabs(a), fmax(fabs(b), fmax(fabs(c), fabs(d))));

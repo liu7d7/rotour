@@ -5,7 +5,7 @@
 #include <string.h>
 #include <tgmath.h>
 
-#define MAX_POINTS 1000  
+#define MAX_POINTS 4096
 
 typedef struct {
     float x;
@@ -40,11 +40,19 @@ static void read_points() {
         float x, y;
         //parse doubles separated by space
         if (sscanf(line, "%f %f", &x, &y) == 2) {
-            
             if (point_count < MAX_POINTS) {
-                points[point_count].x = x;
-                points[point_count].y = y;
-                point_count++;
+                float px = points[point_count-1].x;
+		float py = points[point_count-1].y;
+		float len = hypot(px - x, py - y);
+
+                if (point_count > 0 &&  len > 0.75) {
+		    float slices = ceil(len / 0.5);
+		    for (int s = 0; s < (int)slices; s++) {
+                        points[point_count].x = (points[point_count-1].x+x) * (s + 1) / slices;
+                        points[point_count].y = (points[point_count-1].y+y) * (s + 1) / slices;
+                        point_count++;
+		    }
+                }
             } 
             else {
                 fprintf(stderr, "Maximum number of points (%d) reached. Skipping the rest.\n", MAX_POINTS);
