@@ -251,6 +251,12 @@ motor_scale(float power)
   return copysign(mc_thresh, power) + power * (1 - mc_thresh);
 }
 
+float
+lerp(float a, float b, float delta)
+{
+  return a + (b - a) * delta;
+}
+
 Point
 get_interpolated_point(float max_time, float time)
 {
@@ -263,6 +269,11 @@ get_interpolated_point(float max_time, float time)
 
   int this_seg = delta * n_segments;
   float seg_delta = delta - floor(delta * n_segments) / n_segments;
+
+  return (Point){
+    .x = lerp(points[this_seg].x, points[this_seg + 1].x, seg_delta),
+    .y = lerp(points[this_seg].y, points[this_seg + 1].y, seg_delta)
+  };
 }
 
 int
@@ -284,34 +295,31 @@ main(void)
   squidf px = squidf_new(0.6, 0, 0.2, 0);
   squidf py = squidf_new(0.6, 0, 0.2, 0);
 
-  int cp = 0;
-
   time_s(1);
+
+  float max_time = 10;
 
   bool has_reached_endpoint = false;
   float time_reached_endpoint = 0;
 
+  Point endpoint = points[point_count - 1];
+
   for ever {
     pinpoint_update(&pp);
-    
-    if (cp >= point_count) goto end;
-
-    Point target = points[cp];
+ 
     Point cur = {.x = pp.x, .y = pp.y};
-
-    if (dist(cur, target) < 0.02) {
-      if (cp == point_count - 1) {
-        if (!has_reached_endpoint) {
-          has_reached_endpoint = true;
-	  time_reached_endpoint = time_s(0);
-        } else if (time_s(0) - time_reached_endpoint > 2) {
-	  cp++;
-	}
-      } else {
-        cp++;
+    if (dist(cur, endpoint) > 0.01) {
+      if (!has_reached_endpoint) {
+        has_reached_endpoint = true;
+	time_reached_endpoint = time_s(0);
+      } else if (time_s(0) - time_reached_endpoint > 2) {
+        goto end;
       }
-      continue;
+    } else {
+      has_reached_endpoint = false;
     }
+
+    Point target = get_interpolated_point(10, time_s(0));
 
     float erx = target.x - cur.x, ery = target.y - cur.y;
     float angle_to_target = atan2(ery, erx);
