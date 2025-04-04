@@ -20,7 +20,7 @@
 
 #define button_pin 24
 
-#define mc_thresh 0.033
+#define mc_thresh 0.15
 
 #define err(...) do { \
   fprintf(stderr, "%s:%s:%d > ", __FILE__, __func__, __LINE__); \
@@ -217,7 +217,7 @@ pidf_calc(pidf *this, float error)
 {
   float time = time_s(0);
 
-  float p = this->p * error, i = 0, d = 0;
+  float p = this->p * sqrt(fabs(error)) * copysign(1, error), i = 0, d = 0;
   
   if (!this->first_run) {
     if (this->d != 0) {
@@ -283,6 +283,8 @@ main(void)
 {
   gpioInitialise(); // if this fails it's cooked anyways so why handle the error
   gpioCfgClock(2, 0, 0);
+
+  FILE *log = fopen("log.txt", "w");
   
   mc_y = a4990_new(c0_in1, c0_in2, c0_in3, c0_in4, 1, 1);
   mc_x = a4990_new(c1_in1, c1_in2, c1_in3, c1_in4, 1, -1);
@@ -296,9 +298,9 @@ main(void)
   read_points();
   fflush(stdout);
 
-  pidf ph = pidf_new(0.2, 0, 0.08, 0);
-  pidf px = pidf_new(0.6, 0.1, 0.2, 0);
-  pidf py = pidf_new(0.6, 0.1, 0.2, 0);
+  pidf ph = pidf_new(0.1, 0, 0.08, 0);
+  pidf px = pidf_new(0.6, 0, 0.2, 0);
+  pidf py = pidf_new(0.6, 0, 0.2, 0);
 
   pidf spx = pidf_new(0.2, 0, 0, 0);
   pidf spy = pidf_new(0.2, 0, 0, 0);
@@ -306,7 +308,6 @@ main(void)
   time_s(1);
 
   bool has_reached_endpoint = false;
-  bool prev_should_integrate = false;
   float time_reached_endpoint = 0;
 
   Point endpoint = points[point_count - 1];
@@ -330,19 +331,12 @@ main(void)
     bool should_integrate;
     get_interpolated_point(9.5, time_s(0), &should_integrate, &target);
 
-    if (should_integrate && !prev_should_integrate) {
-      px = spx;
-      py = spy;
-    }
-
-    prev_should_integrate = should_integrate;
-
     float erx = target.x - cur.x, ery = target.y - cur.y;
     float angle_to_target = atan2(ery, erx);
     float angle_error = angle_wrap(angle_to_target);
 
-    float rotated_erx = erx * cos(pp.h) - ery * sin(pp.h);
-    float rotated_ery = ery * cos(pp.h) + erx * sin(pp.h);
+    float rotated_erx = erx * cos(-pp.h) - ery * sin(-pp.h);
+    float rotated_ery = ery * cos(-pp.h) + erx * sin(-pp.h);
 
     float xc = pidf_calc(&px, rotated_erx);
     float yc = pidf_calc(&py, rotated_ery);
@@ -356,6 +350,7 @@ main(void)
     a4990_set_pwr(&mc_x, motor_scale(c), motor_scale(d));
 
     printf("x: %.3f, y: %.3f, h: %.3f, tx: %f, ty: %f, time: %f, xc: %f, yc: %f, hc: %f\n", pp.x, pp.y, pp.h, target.x, target.y, time_s(0), xc, yc, hc);
+    fprintf(log, "x: %.3f, y: %.3f, h: %.3f, tx: %.3f, ty: %.3f\n", pp.x, pp.y, pp.h, target.x, target.y);
 
     usleep(8333);
   }
@@ -364,6 +359,8 @@ end:
 
   a4990_set_pwr(&mc_x, 0, 0);
   a4990_set_pwr(&mc_y, 0, 0);
+
+  fclose(log);
 
   gpioTerminate();
 }
