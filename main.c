@@ -341,8 +341,8 @@ main(void)
     float angle_to_target = atan2(ery, erx);
     float angle_error = angle_wrap(angle_to_target);
 
-    float rotated_erx = erx * cos(pp.h) - ery * sin(pp.h);
-    float rotated_ery = ery * cos(pp.h) + erx * sin(pp.h);
+    float rotated_erx = erx * cos(-pp.h) - ery * sin(-pp.h);
+    float rotated_ery = ery * cos(-pp.h) + erx * sin(-pp.h);
 
     float xc = pidf_calc(&px, rotated_erx);
     float yc = pidf_calc(&py, rotated_ery);
