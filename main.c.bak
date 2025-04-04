@@ -212,16 +212,16 @@ pidf_new(float p, float i, float d, float f)
   return (pidf){p, i, d, f, .first_run = true};
 }
 
+float cur_time;
+
 float
 pidf_calc(pidf *this, float error) 
 {
-  float time = time_s(0);
-
   float p = this->p * sqrt(fabs(error)) * copysign(1, error), i = 0, d = 0;
   
   if (!this->first_run) {
     if (this->d != 0) {
-      d = this->d * (error - this->last_err) / (time - this->last_time);
+      d = this->d * (error - this->last_err) / (cur_time - this->last_time);
     }
     i = this->i * this->err_sum;
   }
@@ -229,9 +229,9 @@ pidf_calc(pidf *this, float error)
   float f = this->f * copysign(1, error);
 
   this->first_run = false;
-  this->err_sum += error * (time - this->last_time);
+  this->err_sum += error * (cur_time - this->last_time);
   this->last_err = error;
-  this->last_time = time;
+  this->last_time = cur_time;
 
   return p + i + d + f;
 }
@@ -278,6 +278,8 @@ get_interpolated_point(float max_time, float time, bool *should_integrate, Point
   *should_integrate = false;
 }
 
+#define happy_time 0.2
+
 int
 main(void)
 {
@@ -298,9 +300,9 @@ main(void)
   read_points();
   fflush(stdout);
 
-  pidf ph = pidf_new(0.1, 0, 0.08, 0);
-  pidf px = pidf_new(0.6, 0, 0.2, 0);
-  pidf py = pidf_new(0.6, 0, 0.2, 0);
+  pidf ph = pidf_new(0.25, 0, 0.05, 0);
+  pidf px = pidf_new(0.7, 0, 0.5, 0);
+  pidf py = pidf_new(0.7, 0, 0.5, 0);
 
   pidf spx = pidf_new(0.2, 0, 0, 0);
   pidf spy = pidf_new(0.2, 0, 0, 0);
@@ -313,14 +315,15 @@ main(void)
   Point endpoint = points[point_count - 1];
 
   for ever {
+    cur_time = time_s(0);
     pinpoint_update(&pp);
  
     Point cur = {.x = pp.x, .y = pp.y};
     if (dist(cur, endpoint) < 0.02) {
       if (!has_reached_endpoint) {
         has_reached_endpoint = true;
-	time_reached_endpoint = time_s(0);
-      } else if (time_s(0) - time_reached_endpoint > 0.5) {
+	time_reached_endpoint = cur_time;
+      } else if (cur_time - time_reached_endpoint > happy_time) {
         goto end;
       }
     } else {
@@ -329,7 +332,7 @@ main(void)
 
     Point target;
     bool should_integrate;
-    get_interpolated_point(9.5, time_s(0), &should_integrate, &target);
+    get_interpolated_point(10 - happy_time, cur_time, &should_integrate, &target);
 
     float erx = target.x - cur.x, ery = target.y - cur.y;
     float angle_to_target = atan2(ery, erx);
@@ -349,7 +352,7 @@ main(void)
     a4990_set_pwr(&mc_y, motor_scale(a), motor_scale(b));
     a4990_set_pwr(&mc_x, motor_scale(c), motor_scale(d));
 
-    printf("x: %.3f, y: %.3f, h: %.3f, tx: %f, ty: %f, time: %f, xc: %f, yc: %f, hc: %f\n", pp.x, pp.y, pp.h, target.x, target.y, time_s(0), xc, yc, hc);
+    printf("x: %.3f, y: %.3f, h: %.3f, tx: %f, ty: %f, time: %f, xc: %f, yc: %f, hc: %f\n", pp.x, pp.y, pp.h, target.x, target.y, cur_time, xc, yc, hc);
     fprintf(log, "x: %.3f, y: %.3f, h: %.3f, tx: %.3f, ty: %.3f\n", pp.x, pp.y, pp.h, target.x, target.y);
 
     usleep(8333);
