@@ -75,11 +75,21 @@ a4990_set_pwr(a4990 *this, float pw1, float pw2)
 
 a4990 mc_x;
 
+float 
+motor_scale(float power) 
+{
+  return copysign(mc_thresh, power) + power * (1 - mc_thresh);
+}
+
 int
 main() {
   gpioInitialise(); 
 
   mc_x = a4990_new(c1_in1, c1_in2, c1_in3, c1_in4, 1, -1);
 
-  a4990_set_pwr(&mc_x, 0, 0);
+  for (int i = 0; i <= 10; i++) {
+    a4990_set_pwr(&mc_x, motor_scale((float)i * 0.1), motor_scale((float)i * 0.1));
+    printf("%d\n", i);
+    sleep(5);
+  }
 }

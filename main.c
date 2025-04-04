@@ -215,9 +215,15 @@ pidf_new(float p, float i, float d, float f)
 float cur_time;
 
 float
-pidf_calc(pidf *this, float error) 
+pidf_calc(pidf *this, float error, bool sq) 
 {
-  float p = this->p * sqrt(fabs(error)) * copysign(1, error), i = 0, d = 0;
+  float p, i = 0, d = 0;
+
+  if (sq) {
+    p = this->p * sqrt(fabs(error)) * copysign(1, error);
+  } else {
+    p = this->p * error;
+  }
   
   if (!this->first_run) {
     if (this->d != 0) {
@@ -275,6 +281,7 @@ get_interpolated_point(float max_time, float time, bool *over, Point *out)
     .x = lerp(points[this_seg].x, points[this_seg + 1].x, seg_delta),
     .y = lerp(points[this_seg].y, points[this_seg + 1].y, seg_delta)
   };
+
   *over = false;
 }
 
@@ -301,17 +308,12 @@ one_run(void)
   sleep(4);
   pinpoint_update(&pp);
 
-  gpioSetMode(button_pin, PI_INPUT);
-
   read_points();
   fflush(stdout);
 
   pidf ph = pidf_new(0.25, 0, 0.05, 0);
-  pidf px = pidf_new(0.7, 0, 0.5, 0);
-  pidf py = pidf_new(0.7, 0, 0.5, 0);
-
-  pidf spx = pidf_new(0.2, 0, 0, 0);
-  pidf spy = pidf_new(0.2, 0, 0, 0);
+  pidf px = pidf_new(0.5, 0, 0, 0);
+  pidf py = pidf_new(0.5, 0, 0, 0);
 
   time_s(1);
 
@@ -334,7 +336,7 @@ one_run(void)
     if (dist(cur, endpoint) < 0.02 && over) {
       if (!has_reached_endpoint) {
         has_reached_endpoint = true;
-	time_reached_endpoint = cur_time;
+        time_reached_endpoint = cur_time;
       } else if (cur_time - time_reached_endpoint > happy_time) {
         goto end;
       }
@@ -349,9 +351,9 @@ one_run(void)
     float rotated_erx = erx * cos(-pp.h) - ery * sin(-pp.h);
     float rotated_ery = ery * cos(-pp.h) + erx * sin(-pp.h);
 
-    float xc = pidf_calc(&px, rotated_erx);
-    float yc = pidf_calc(&py, rotated_ery);
-    float hc = pidf_calc(&ph, pp.h);
+    float xc = pidf_calc(&px, rotated_erx, over);
+    float yc = pidf_calc(&py, rotated_ery, over);
+    float hc = pidf_calc(&ph, pp.h, false);
 
     float a = yc - hc, b = yc + hc, c = xc + hc, d = xc - hc;
     float mm = fmax(fabs(a), fmax(fabs(b), fmax(fabs(c), fabs(d))));
@@ -367,6 +369,8 @@ one_run(void)
   }
 
 end:
+
+  button_ticks = 0;
 
   a4990_set_pwr(&mc_x, 0, 0);
   a4990_set_pwr(&mc_y, 0, 0);
@@ -394,6 +398,8 @@ main(void)
 
       usleep(100000);
     }
+
+    button_ticks = 0;
 
     one_run();
   }
