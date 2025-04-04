@@ -18,8 +18,11 @@ static float dist(Point a, Point b) {
 
 Point points[MAX_POINTS];
 int point_count;
+float max_time;
 
 static void read_points() {
+    point_count = 0;
+
     FILE *file = fopen("points.txt", "r");
     if (file == NULL) {
         perror("Error opening file");
@@ -29,6 +32,8 @@ static void read_points() {
     char line[256];
 
     float px = 0, py = 0;
+
+    fscanf(file, "%f\n", &max_time);
 
     while (fgets(line, sizeof(line), file) != NULL) {
         // Skip empty lines and comments (lines starting with #)

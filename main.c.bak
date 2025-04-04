@@ -18,7 +18,7 @@
 #define c1_in3 20
 #define c1_in4 21
 
-#define button_pin 24
+#define button_pin 26
 
 #define mc_thresh 0.15
 
@@ -255,14 +255,14 @@ lerp(float a, float b, float delta)
 }
 
 void
-get_interpolated_point(float max_time, float time, bool *should_integrate, Point *out)
+get_interpolated_point(float max_time, float time, bool *over, Point *out)
 {
   int n_segments = point_count - 1;
   float delta = time / max_time;
 
   if (delta >= 1.) {
     *out = points[point_count - 1];
-    *should_integrate = true;
+    *over = true;
     return;
   }
 
@@ -275,21 +275,27 @@ get_interpolated_point(float max_time, float time, bool *should_integrate, Point
     .x = lerp(points[this_seg].x, points[this_seg + 1].x, seg_delta),
     .y = lerp(points[this_seg].y, points[this_seg + 1].y, seg_delta)
   };
-  *should_integrate = false;
+  *over = false;
 }
 
 #define happy_time 0.2
 
-int
-main(void)
-{
-  gpioInitialise(); // if this fails it's cooked anyways so why handle the error
-  gpioCfgClock(2, 0, 0);
+int button_ticks = 0;
 
+void
+update_button(void)
+{
+  if (gpioRead(button_pin)) {
+    button_ticks++;
+  } else {
+    button_ticks = 0;
+  }
+}
+
+void
+one_run(void)
+{
   FILE *log = fopen("log.txt", "w");
-  
-  mc_y = a4990_new(c0_in1, c0_in2, c0_in3, c0_in4, 1, 1);
-  mc_x = a4990_new(c1_in1, c1_in2, c1_in3, c1_in4, 1, -1);
 
   pp = pinpoint_new(1, 0x31, 40., -40.);
   sleep(4);
@@ -315,11 +321,17 @@ main(void)
   Point endpoint = points[point_count - 1];
 
   for ever {
+    if (button_ticks > 5) goto end;
+    update_button();
     cur_time = time_s(0);
     pinpoint_update(&pp);
+
+    Point target;
+    bool over;
+    get_interpolated_point(max_time - happy_time, cur_time, &over, &target);
  
     Point cur = {.x = pp.x, .y = pp.y};
-    if (dist(cur, endpoint) < 0.02) {
+    if (dist(cur, endpoint) < 0.02 && over) {
       if (!has_reached_endpoint) {
         has_reached_endpoint = true;
 	time_reached_endpoint = cur_time;
@@ -329,10 +341,6 @@ main(void)
     } else {
       has_reached_endpoint = false;
     }
-
-    Point target;
-    bool should_integrate;
-    get_interpolated_point(10 - happy_time, cur_time, &should_integrate, &target);
 
     float erx = target.x - cur.x, ery = target.y - cur.y;
     float angle_to_target = atan2(ery, erx);
@@ -364,6 +372,31 @@ end:
   a4990_set_pwr(&mc_y, 0, 0);
 
   fclose(log);
+}
+
+int
+main(void)
+{
+  gpioInitialise(); // if this fails it's cooked anyways so why handle the error
+  gpioCfgClock(2, 0, 0);
+
+  gpioSetMode(button_pin, PI_INPUT);
+
+  mc_y = a4990_new(c0_in1, c0_in2, c0_in3, c0_in4, 1, 1);
+  mc_x = a4990_new(c1_in1, c1_in2, c1_in3, c1_in4, 1, -1);
+
+  a4990_set_pwr(&mc_x, 0, 0);
+  a4990_set_pwr(&mc_y, 0, 0);
+
+  for ever {
+    while (button_ticks < 5) {
+      update_button();
+
+      usleep(100000);
+    }
+
+    one_run();
+  }
 
   gpioTerminate();
 }
