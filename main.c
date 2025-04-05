@@ -20,7 +20,7 @@
 
 #define button_pin 26
 
-#define mc_thresh 0.35
+#define mc_thresh 0.2
 
 #define err(...) do { \
   fprintf(stderr, "%s:%s:%d > ", __FILE__, __func__, __LINE__); \

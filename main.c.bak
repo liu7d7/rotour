@@ -20,7 +20,7 @@
 
 #define button_pin 26
 
-#define mc_thresh 0.35
+#define mc_thresh 0.2
 
 #define err(...) do { \
   fprintf(stderr, "%s:%s:%d > ", __FILE__, __func__, __LINE__); \
@@ -312,9 +312,9 @@ one_run(void)
   read_points();
   fflush(stdout);
 
-  pidf ph = pidf_new(1.0, 0, 0.2, 0);
-  pidf px = pidf_new(3.6, 0, 0.2, 0);
-  pidf py = pidf_new(3.6, 0, 0.2, 0);
+  pidf ph = pidf_new(1.0, 0, 0.22, 0);
+  pidf px = pidf_new(3.6, 0, 0.22, 0);
+  pidf py = pidf_new(3.6, 0, 0.22, 0);
 
   time_s(1);
 
