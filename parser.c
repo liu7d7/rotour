@@ -18,6 +18,7 @@ static float dist(Point a, Point b) {
 
 Point points[MAX_POINTS];
 int point_count;
+float target_heading;
 float max_time;
 
 static void read_points() {
@@ -34,6 +35,7 @@ static void read_points() {
     float px = 0, py = 0;
 
     fscanf(file, "%f\n", &max_time);
+    fscanf(file, "%f\n", &target_heading);
 
     while (fgets(line, sizeof(line), file) != NULL) {
         // Skip empty lines and comments (lines starting with #)
@@ -45,8 +47,8 @@ static void read_points() {
         line[strcspn(line, "\n")] = 0;
 
         float x, y;
-        //parse doubles separated by space
-        if (sscanf(line, "%f %f", &x, &y) == 2) {
+        //parse doubles separated by tab
+        if (sscanf(line, "%f\t%f", &x, &y) == 2) {
             if (point_count < MAX_POINTS) {
 		float dx = x - px;
 		float dy = y - py;

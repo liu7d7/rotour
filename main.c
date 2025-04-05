@@ -20,7 +20,7 @@
 
 #define button_pin 26
 
-#define mc_thresh 0.2
+#define mc_thresh 0.12
 
 #define err(...) do { \
   fprintf(stderr, "%s:%s:%d > ", __FILE__, __func__, __LINE__); \
@@ -303,8 +303,6 @@ update_button(void)
 void
 one_run(void)
 {
-  FILE *log = fopen("log.txt", "w");
-
   pp = pinpoint_new(1, 0x31, 40., -40.);
   sleep(4);
   pinpoint_update(&pp);
@@ -312,9 +310,9 @@ one_run(void)
   read_points();
   fflush(stdout);
 
-  pidf ph = pidf_new(1.0, 0, 0.22, 0);
-  pidf px = pidf_new(3.6, 0, 0.22, 0);
-  pidf py = pidf_new(3.6, 0, 0.22, 0);
+  pidf ph = pidf_new(0.45, 0, 0.08, 0);
+  pidf px = pidf_new(2.1, 0, 0.14, 0);
+  pidf py = pidf_new(2.1, 0, 0.14, 0);
 
   time_s(1);
 
@@ -355,7 +353,7 @@ one_run(void)
 
     float xc = pidf_calc(&px, rotated_erx, true);
     float yc = pidf_calc(&py, rotated_ery, true);
-    float hc = pidf_calc(&ph, angle_wrap(pp.h), true);
+    float hc = pidf_calc(&ph, angle_wrap(pp.h - target_heading), true);
 
     float a = yc - hc, b = yc + hc, c = xc + hc, d = xc - hc;
     float mm = fmax(fabs(a), fmax(fabs(b), fmax(fabs(c), fabs(d))));
@@ -366,8 +364,7 @@ one_run(void)
     a4990_set_pwr(&mc_y, motor_scale(a), motor_scale(b));
     a4990_set_pwr(&mc_x, motor_scale(c), motor_scale(d));
 
-    printf("x: %.3f, y: %.3f, h: %.3f, tx: %f, ty: %f, time: %f, xc: %f, yc: %f, hc: %f\n", pp.x, pp.y, pp.h, target.x, target.y, cur_time, xc, yc, hc);
-    fprintf(log, "x: %.3f, y: %.3f, h: %.3f, tx: %.3f, ty: %.3f\n", pp.x, pp.y, pp.h, target.x, target.y);
+    usleep(16666);
   }
 
 end:
@@ -376,8 +373,6 @@ end:
 
   a4990_set_pwr(&mc_x, 0, 0);
   a4990_set_pwr(&mc_y, 0, 0);
-
-  fclose(log);
 }
 
 int
