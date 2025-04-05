@@ -20,7 +20,7 @@
 
 #define button_pin 26
 
-#define mc_thresh 0.15
+#define mc_thresh 0.35
 
 #define err(...) do { \
   fprintf(stderr, "%s:%s:%d > ", __FILE__, __func__, __LINE__); \
@@ -229,6 +229,7 @@ pidf_calc(pidf *this, float error, bool sq)
     if (this->d != 0) {
       d = this->d * (error - this->last_err) / (cur_time - this->last_time);
     }
+
     i = this->i * this->err_sum;
   }
 
@@ -311,9 +312,9 @@ one_run(void)
   read_points();
   fflush(stdout);
 
-  pidf ph = pidf_new(0.25, 0, 0.05, 0);
-  pidf px = pidf_new(0.5, 0, 0, 0);
-  pidf py = pidf_new(0.5, 0, 0, 0);
+  pidf ph = pidf_new(1.0, 0, 0.22, 0);
+  pidf px = pidf_new(3.6, 0, 0.22, 0);
+  pidf py = pidf_new(3.6, 0, 0.22, 0);
 
   time_s(1);
 
@@ -324,6 +325,7 @@ one_run(void)
 
   for ever {
     if (button_ticks > 5) goto end;
+
     update_button();
     cur_time = time_s(0);
     pinpoint_update(&pp);
@@ -351,21 +353,21 @@ one_run(void)
     float rotated_erx = erx * cos(-pp.h) - ery * sin(-pp.h);
     float rotated_ery = ery * cos(-pp.h) + erx * sin(-pp.h);
 
-    float xc = pidf_calc(&px, rotated_erx, over);
-    float yc = pidf_calc(&py, rotated_ery, over);
-    float hc = pidf_calc(&ph, pp.h, false);
+    float xc = pidf_calc(&px, rotated_erx, true);
+    float yc = pidf_calc(&py, rotated_ery, true);
+    float hc = pidf_calc(&ph, angle_wrap(pp.h), true);
 
     float a = yc - hc, b = yc + hc, c = xc + hc, d = xc - hc;
     float mm = fmax(fabs(a), fmax(fabs(b), fmax(fabs(c), fabs(d))));
-    a /= mm, b /= mm, c /= mm, d /= mm;
+    if (mm > 1) {
+      a /= mm, b /= mm, c /= mm, d /= mm;
+    }
 
     a4990_set_pwr(&mc_y, motor_scale(a), motor_scale(b));
     a4990_set_pwr(&mc_x, motor_scale(c), motor_scale(d));
 
     printf("x: %.3f, y: %.3f, h: %.3f, tx: %f, ty: %f, time: %f, xc: %f, yc: %f, hc: %f\n", pp.x, pp.y, pp.h, target.x, target.y, cur_time, xc, yc, hc);
     fprintf(log, "x: %.3f, y: %.3f, h: %.3f, tx: %.3f, ty: %.3f\n", pp.x, pp.y, pp.h, target.x, target.y);
-
-    usleep(8333);
   }
 
 end:
@@ -398,6 +400,8 @@ main(void)
 
       usleep(100000);
     }
+
+    sleep(2);
 
     button_ticks = 0;
 

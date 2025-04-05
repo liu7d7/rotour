@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <unistd.h>
 #include <pigpio.h>
 #include <math.h>
 
@@ -9,7 +10,7 @@ typedef struct a4990 {
 
 #define pwm_range 20000
 
-#define mc_thresh 0.15
+#define mc_thresh 0.35
 
 #define err(...) do { \
   fprintf(stderr, "%s:%s:%d > ", __FILE__, __func__, __LINE__); \
@@ -81,15 +82,22 @@ motor_scale(float power)
   return copysign(mc_thresh, power) + power * (1 - mc_thresh);
 }
 
+#define button_pin 26
+
 int
 main() {
   gpioInitialise(); 
 
+  gpioSetMode(button_pin, PI_INPUT);
+
   mc_x = a4990_new(c1_in1, c1_in2, c1_in3, c1_in4, 1, -1);
 
   for (int i = 0; i <= 10; i++) {
+    if (gpioRead(button_pin)) break;
     a4990_set_pwr(&mc_x, motor_scale((float)i * 0.1), motor_scale((float)i * 0.1));
     printf("%d\n", i);
     sleep(5);
   }
+
+  a4990_set_pwr(&mc_x, 0, 0);
 }
